@@ -52,9 +52,16 @@ struct tile {
 };
 
 // Add your own structs below this line
-typedef struct GameState {
+typedef struct Coord{
+    int x;
+    int y;
+} Coord;
 
+
+typedef struct GameState {
+    Coord submarine_position;
 } GameState;
+
 
 // Provided Function Prototypes
 void print_welcome(void);
@@ -89,6 +96,8 @@ void print_oxygen_loss_message(void);
 
 // Add your function prototypes below this line
 char *entity_to_display(enum entity type);
+
+//Restoring turns ()
 
 // Provided sample main() function (you will need to modify this)
 int main(void) {
@@ -172,6 +181,7 @@ void print_board(struct tile board[ROWS][COLS], int submarine_row, int submarine
         for (int col = 0; col < COLS; col++) {
             printf("|");
             struct tile _tile = board[row][col];
+
             if (row == submarine_row && col == submarine_col) {
                 printf("[o>");
             } else {
