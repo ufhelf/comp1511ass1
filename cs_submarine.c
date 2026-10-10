@@ -52,24 +52,37 @@ struct tile {
 };
 
 // Add your own structs below this line
-typedef struct Coord{
+typedef struct Coord2{
     int x;
     int y;
-} Coord;
+} Coord2;
+
+//Normally for storing input data
+typedef struct Coord4{
+    int x;
+    int y;
+    int z;
+    int w;
+} Coord3;
 
 
+//Gamestate + storing gamestate in a linked l
 typedef struct GameState {
-    Coord submarine_position;
-} GameState;
+    Coord2 submarine_pos;
+    int oxygen;
+    int treasures;
+    int turns;
+    int torpedoes;
 
+    struct tile board[ROWS][COLS];
+} GameState;
 
 // Provided Function Prototypes
 void print_welcome(void);
 void initialise_board(struct tile board[ROWS][COLS]);
 void print_board(
     struct tile board[ROWS][COLS], 
-    int submarine_row, 
-    int submarine_col
+    Coord2 sub_pos
 );
 void print_submarine_stats(
     int oxygen,
@@ -87,6 +100,7 @@ void print_map_statistics(
     int num_exits
 );
 void print_board_line(void);
+void print_setup_phase();
 void print_tile_spacer(void);
 void print_board_header(void);
 char *get_name_from_type(enum entity entity_type);
@@ -96,19 +110,28 @@ void print_oxygen_loss_message(void);
 
 // Add your function prototypes below this line
 char *entity_to_display(enum entity type);
+void setup(GameState *currentState);
+void setup_sub(GameState *currentState);
 
+Coord2 coord2(int x, int y);
+
+bool isTileOccupied(GameState state, Coord2 p);
+bool isCoordValid(Coord2 pos);
 //Restoring turns ()
 
-// Provided sample main() function (you will need to modify this)
 int main(void) {
     print_welcome();
+    GameState currentState;
 
-    struct tile board[ROWS][COLS];
-    initialise_board(board);
+    //Setup phase
+    initialise_board(currentState.board);
+    print_setup_phase();
+    setup(&currentState);
+    setup_sub(&currentState);
 
     //Main game loop
     while(true) {
-        print_board(board, NO_SUBMARINE, NO_SUBMARINE);
+        print_board(currentState.board, currentState.submarine_pos);
         break;
     }
 
@@ -116,6 +139,34 @@ int main(void) {
 }
 
 // Add your function definitions below this line
+bool isCoordValid(Coord2 pos) {
+    if (pos.x > ROWS - 1 || pos.y > COLS - 1 || pos.x < 0 || pos.y < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+bool isTileOccupied(GameState state, Coord2 p) {
+    if (state.board[p.x][p.y].entity == OCEAN) {
+        return false;
+    }
+
+    return true;
+}
+
+void set_tile(GameState *state, Coord2 pos, enum entity tiletype) {
+    if(isCoordValid(pos)) {
+        state->board[pos.x][pos.y].entity = tiletype;
+    }
+}
+
+Coord2 coord2(int x, int y) {
+    Coord2 p;
+    p.x = x;
+    p.y = y;
+    return p;
+}
 
 //This is stupid
 //Ask if i can swap to switch statement
@@ -150,14 +201,13 @@ char *entity_to_display(enum entity type){
         return ">>>";
     } else if (type == TORPEDO) {
         return "-*-";
-    } else {
+    } else if (type == OCEAN){
         return "   ";
     }
+    else{
+        return "INVALID";
+    }
 }
-
-// =============================================================================
-// EDITABLE Provided Functions
-// =============================================================================
 
 // Given a 2D board array:
 // Initialise all tile entities to OCEAN.
@@ -169,8 +219,94 @@ void initialise_board(struct tile board[ROWS][COLS]) {
     }
 }
 
+void set_tile_area(GameState *state, Coord2 pos, enum entity type, char dir, int len) {
+    Coord2 direction = (dir == 'v') ? coord2(-1, 0) : coord2(0, 1);
+
+    for(int i = 0; i < len; i++) {
+        Coord2 current_pos;
+        current_pos.x = pos.x + i * direction.x;
+        current_pos.y = pos.y + i * direction.y;
+
+        set_tile(state, current_pos, type);
+    }
+}
+
+void setup(GameState *currentState) {
+    printf("Enter setup commands:\n");
+
+    char command;
+    char buffer[100];
+    bool isExitPlaced = false;
+    Coord2 pos;
+
+    char dir;
+    int length;
+
+    while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        if (buffer[0] == 'e') {
+            if (isExitPlaced) {
+                break;
+            }
+
+            printf("Cannot end setup until an EXIT_LOCKED has been placed\n");
+            continue;
+        }
+
+        if (sscanf(buffer, " %c %d %d %c %d", &command, &pos.x, &pos.y, &dir, &length) == 5) {
+            if (!isCoordValid(pos)) {
+                printf("Invalid location: position is not on the board!\n");
+            } else if (isTileOccupied(*currentState, pos)) {
+                printf("Invalid location: tile is occupied!\n");
+            } else if (command == 's') {
+                set_tile_area(currentState, pos, SEAWEED, dir, length);
+                continue;
+            }
+
+            continue;
+        }
+
+        else if (sscanf(buffer, " %c %d %d", &command, &pos.x, &pos.y) == 3) {
+            if (!isCoordValid(pos)) {
+                printf("Invalid location: position is not on the board!\n");
+            } else if (isTileOccupied(*currentState, pos)) {
+                printf("Invalid location: tile is occupied!\n");
+            } else if (command == 't') {
+                set_tile(currentState, pos, TREASURE);
+            } else if (command == 'o') {
+                set_tile(currentState, pos, AIR_POCKET);
+            } else if (command == 'm') {
+                set_tile(currentState, pos, MINE);
+            } else if (command == 'x') {
+                isExitPlaced = true;
+                set_tile(currentState, pos, EXIT_LOCKED);
+            }
+
+            continue;
+        }
+
+        printf("Invalid command\n");
+    }
+}
+
+void setup_sub(GameState *state) {
+    Coord2 p;
+
+    while(1) {
+        printf("Enter the Submarine's starting position: ");
+        scanf("%d %d", &p.x, &p.y);
+
+        if (isCoordValid(p) && !isTileOccupied(*state, p)) {
+            break;
+        }
+
+        printf("The Submarine cannot start here!\n");
+    }
+
+    state->submarine_pos = p;
+}
+
 // Prints the game board, showing the submarine's position and entities.
-void print_board(struct tile board[ROWS][COLS], int submarine_row, int submarine_col) {
+void print_board(struct tile board[ROWS][COLS], Coord2 sub_pos) {
     print_board_line();
     print_board_header();
     print_board_line();
@@ -182,7 +318,7 @@ void print_board(struct tile board[ROWS][COLS], int submarine_row, int submarine
             printf("|");
             struct tile _tile = board[row][col];
 
-            if (row == submarine_row && col == submarine_col) {
+            if (row == sub_pos.x && col == sub_pos.y) {
                 printf("[o>");
             } else {
                 printf("%s", entity_to_display(_tile.entity));
@@ -248,6 +384,10 @@ void print_win_message(void) {
     printf("+=======================================+\n");
     printf("|  *** ESCAPED WITH THE TREASURE! ***   |\n");
     printf("+=======================================+\n");
+}
+
+void print_setup_phase() {
+    printf("============== Setup Phase ==============\n");
 }
 
 // Prints the game loss message given an entity type
